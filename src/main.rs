@@ -5,8 +5,8 @@ use std::iter::FromIterator;
 use std::{hash::BuildHasherDefault, path::PathBuf};
 use structopt::StructOpt;
 
-mod kimundi;
 mod original;
+mod variant;
 
 // NB: We will not exhaust a u64 with modern computers as long as its
 // counted up by 1 at a time.
@@ -56,7 +56,7 @@ fn main() {
     match &opt.algorithm[..] {
         "original" => generic_main::<Original<original::StdNumeric>>(opt),
         "original-hex" => generic_main::<Original<original::HexDigit>>(opt),
-        "kimundi-1" => generic_main::<kimundi::Variant1>(opt),
+        "variant-1" => generic_main::<variant::Variant1>(opt),
         other => {
             panic!("Unsupported algorithm {}\n{}", other, ERRMSG);
         }
