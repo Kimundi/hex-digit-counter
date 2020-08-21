@@ -2,32 +2,27 @@ use original::Original;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::iter::FromIterator;
+use std::path::PathBuf;
+use structopt::StructOpt;
 
 mod kimundi;
 mod original;
 
-pub trait Process {
+type Counter = u64;
+
+trait Process {
     fn new(digit: usize) -> Self;
     fn on_byte(&mut self, b: u8);
     fn finalize(&mut self);
-    fn into_count(self) -> HashMap<Vec<u8>, u128>;
+    fn into_count(self) -> HashMap<Vec<u8>, Counter>;
 }
-
-fn main() {
-    generic_main::<Original>();
-}
-
-static ERRMSG: &str =
-    "Usage: <path> <digit> [buffer (MiB)]\nNote that maximum supported file size is 2^128-1 bytes.";
-static CAPACITY: usize = 2048;
-static INTERVAL: u128 = 10000000;
-
-use std::path::PathBuf;
-use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "basic")]
 struct Opt {
+    #[structopt(name = "ALGORITHM")]
+    algorithm: String,
+
     #[structopt(name = "FILE", parse(from_os_str))]
     file: PathBuf,
 
@@ -38,10 +33,26 @@ struct Opt {
     capacity: Option<usize>,
 }
 
-pub fn generic_main<T: Process>() {
+fn main() {
     let opt = Opt::from_args();
     println!("{:#?}", opt);
 
+    match &opt.algorithm[..] {
+        "original" => generic_main::<Original<original::StdNumeric>>(opt),
+        "original-hex" => generic_main::<Original<original::HexDigit>>(opt),
+        "kimundi-1" => generic_main::<kimundi::Variant1>(opt),
+        other => {
+            panic!("Unsupported algorithm {}\n{}", other, ERRMSG);
+        }
+    }
+}
+
+static ERRMSG: &str =
+    "Usage: <algorithm> <path> <digit> [buffer (MiB)]\nNote that maximum supported file size is 2^128-1 bytes.";
+static CAPACITY: usize = 2048;
+static INTERVAL: u128 = 10000000;
+
+fn generic_main<T: Process>(opt: Opt) {
     let path = opt.file;
     let digit = opt.digit;
     let capacity = opt.capacity.unwrap_or_else(|| {
@@ -95,6 +106,15 @@ pub fn generic_main<T: Process>() {
         Err(error) => panic!("{}", error),
     };
     let count = imp.into_count();
+
+    {
+        let mut count = count.iter().collect::<Vec<_>>();
+        count.sort();
+        for (k, v) in count {
+            println!("[{}]: {:?}", std::str::from_utf8(&k).unwrap(), v);
+        }
+    }
+
     for i in 0..digit {
         let mut filter = count.clone();
         filter.retain(|k, _| k.len() == i + 1);
