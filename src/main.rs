@@ -4,6 +4,7 @@ use std::io::{Read, Write};
 use std::iter::FromIterator;
 use std::{hash::BuildHasherDefault, path::PathBuf};
 use structopt::StructOpt;
+use variant::Variant;
 
 mod original;
 mod variant;
@@ -56,7 +57,8 @@ fn main() {
     match &opt.algorithm[..] {
         "original" => generic_main::<Original<original::StdNumeric>>(opt),
         "original-hex" => generic_main::<Original<original::HexDigit>>(opt),
-        "variant-1" => generic_main::<variant::Variant1>(opt),
+        "variant-1" => generic_main::<Variant<variant::EarlyCount>>(opt),
+        "variant-2" => generic_main::<Variant<variant::LateCount>>(opt),
         other => {
             panic!("Unsupported algorithm {}\n{}", other, ERRMSG);
         }

@@ -17,7 +17,7 @@ const DIGIT_MAP: &[u8; 256] = &[
     255, 255, 255,
 ];
 
-const HEX_MASKS: &[u64; 17] = &[
+const HEX_MASKS: &[Number; 17] = &[
     0x0000000000000000,
     0x000000000000000f,
     0x00000000000000ff,
@@ -37,14 +37,30 @@ const HEX_MASKS: &[u64; 17] = &[
     0xffffffffffffffff,
 ];
 
-struct Context {
-    count_maps: Vec<FastHashMap<u64, Counter>>,
-    digits: usize,
-}
-
 type Number = u64;
 
-impl Context {
+pub trait CountStrat: Default {
+    const EARLY: bool;
+}
+#[derive(Default)]
+pub struct EarlyCount;
+impl CountStrat for EarlyCount {
+    const EARLY: bool = true;
+}
+
+#[derive(Default)]
+pub struct LateCount;
+impl CountStrat for LateCount {
+    const EARLY: bool = false;
+}
+
+struct Context<T> {
+    count_maps: Vec<FastHashMap<Number, Counter>>,
+    digits: usize,
+    _strat: T,
+}
+
+impl<T: CountStrat> Context<T> {
     fn new(digits: usize) -> Self {
         assert!(std::mem::size_of::<Number>() * 2 >= digits);
 
@@ -66,7 +82,11 @@ impl Context {
             masks.push(mask);
         }
 
-        Self { count_maps, digits }
+        Self {
+            count_maps,
+            digits,
+            _strat: T::default(),
+        }
     }
 
     fn count_digit(&mut self, byte: u8, state: &mut BytesState) {
@@ -102,6 +122,9 @@ impl Context {
             *self.count_maps[width].entry(v).or_default() += 1;
             println!("  count {:0width$x}", v, width = width);
             v >>= 4;
+            if !T::EARLY {
+                break;
+            }
         }
         println!();
     }
@@ -115,6 +138,14 @@ impl Context {
 
     fn count_number_mid(&mut self, v: u64, width: usize) {
         self.count_number(v, width);
+    }
+
+    fn compute_sub_counts(&mut self) -> &mut Self {
+        if !T::EARLY {
+            //
+        }
+
+        self
     }
 }
 
@@ -137,12 +168,12 @@ impl BytesState {
     }
 }
 
-pub struct Variant1 {
-    ctx: Context,
+pub struct Variant<T> {
+    ctx: Context<T>,
     state: BytesState,
 }
 
-impl Process for Variant1 {
+impl<T: CountStrat> Process for Variant<T> {
     fn new(digits: usize) -> Self {
         Self {
             ctx: Context::new(digits),
@@ -154,6 +185,7 @@ impl Process for Variant1 {
     }
     fn finalize(&mut self) {
         self.ctx.count_digit_end(&mut self.state);
+        self.ctx.compute_sub_counts();
     }
     fn into_count(self) -> FastHashMap<Vec<u8>, Counter> {
         let mut map = FastHashMap::default();
@@ -185,7 +217,7 @@ impl Process for Variant1 {
 mod tests {
     use super::*;
 
-    impl Context {
+    impl<T: CountStrat> Context<T> {
         fn count_digits(&mut self, data: &[u8]) -> &mut Self {
             let mut state = BytesState::new(self.digits);
 
@@ -196,10 +228,6 @@ mod tests {
             }
             self.count_digit_end(&mut state);
 
-            self
-        }
-
-        fn compute_sub_counts(&mut self) -> &mut Self {
             self
         }
 
@@ -216,28 +244,30 @@ mod tests {
 
     #[test]
     fn test_main() {
+        type Ctx = Context<LateCount>;
+
         println!("-1----------------------------");
-        Context::new(2)
+        Ctx::new(2)
             .count_digits(b"1234567890")
             .compute_sub_counts()
             .output();
         println!("-2----------------------------");
-        Context::new(2)
+        Ctx::new(2)
             .count_digits(b"_1234_5678_90_7")
             .compute_sub_counts()
             .output();
         println!("-3----------------------------");
-        Context::new(5)
+        Ctx::new(5)
             .count_digits(b"1234567890_ffff")
             .compute_sub_counts()
             .output();
         println!("-4----------------------------");
-        Context::new(5)
+        Ctx::new(5)
             .count_digits(b"1_23_456_7890_abcde_f01234")
             .compute_sub_counts()
             .output();
         println!("-5----------------------------");
-        Context::new(5)
+        Ctx::new(5)
             .count_digits(b"1_23_456_7890_abcde_987654_f012341_23_456_123")
             .compute_sub_counts()
             .output();
