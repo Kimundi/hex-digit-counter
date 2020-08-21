@@ -1,5 +1,4 @@
-use crate::{Counter, Process};
-use std::collections::HashMap;
+use crate::{Counter, FastHashMap, Process};
 
 fn is_not_numeric<T: NumericType>(vec: &Vec<u8>) -> bool {
     for &c in vec {
@@ -30,22 +29,22 @@ impl NumericType for HexDigit {
 }
 
 pub struct Original<T> {
-    count: HashMap<Vec<u8>, Counter>,
+    count: FastHashMap<Vec<u8>, Counter>,
     buffer: Vec<Vec<u8>>,
     _numeric_type: T,
 }
 
-fn p(b: &[u8], i: usize) {
-    //println!("Buffer[{}] = [{}]", i, std::str::from_utf8(b).unwrap());
+fn _debug_print(b: &[u8], i: usize) {
+    println!("Buffer[{}] = [{}]", i, std::str::from_utf8(b).unwrap());
 }
 
 impl<T: NumericType> Process for Original<T> {
     fn new(digit: usize) -> Self {
-        let count: HashMap<Vec<u8>, Counter> = HashMap::new();
+        let count: FastHashMap<Vec<u8>, Counter> = FastHashMap::default();
         let mut buffer: Vec<Vec<u8>> = Vec::with_capacity(digit);
         for i in 0..digit {
             let b = b"_".repeat(i + 1);
-            p(&b, buffer.len());
+            //_debug_print(&b, buffer.len());
             buffer.push(b);
         }
 
@@ -62,7 +61,7 @@ impl<T: NumericType> Process for Original<T> {
         for i in 0..(self.buffer.len()) {
             self.buffer[i].remove(0);
             self.buffer[i].push(byte);
-            p(&self.buffer[i], i);
+            //_debug_print(&self.buffer[i], i);
             *self.count.entry(self.buffer[i].clone()).or_insert(0) += 1;
         }
     }
@@ -73,7 +72,7 @@ impl<T: NumericType> Process for Original<T> {
             }
         }
     }
-    fn into_count(self) -> HashMap<Vec<u8>, Counter> {
+    fn into_count(self) -> FastHashMap<Vec<u8>, Counter> {
         self.count
     }
 }

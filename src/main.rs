@@ -2,19 +2,28 @@ use original::Original;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::iter::FromIterator;
-use std::path::PathBuf;
+use std::{hash::BuildHasherDefault, path::PathBuf};
 use structopt::StructOpt;
 
 mod kimundi;
 mod original;
 
+// NB: We will not exhaust a u64 with modern computers as long as its
+// counted up by 1 at a time.
 type Counter = u64;
+
+//type HashFn = std::collections::hash_map::DefaultHasher;
+type HashFn = fxhash::FxHasher;
+
+type FastHashMap<K, V> = HashMap<K, V, BuildHasherDefault<HashFn>>;
+
+const DEBUG_PRINT_COUNTS: bool = false;
 
 trait Process {
     fn new(digit: usize) -> Self;
     fn on_byte(&mut self, b: u8);
     fn finalize(&mut self);
-    fn into_count(self) -> HashMap<Vec<u8>, Counter>;
+    fn into_count(self) -> FastHashMap<Vec<u8>, Counter>;
 }
 
 #[derive(StructOpt, Debug)]
@@ -107,7 +116,7 @@ fn generic_main<T: Process>(opt: Opt) {
     };
     let count = imp.into_count();
 
-    {
+    if DEBUG_PRINT_COUNTS {
         let mut count = count.iter().collect::<Vec<_>>();
         count.sort();
         for (k, v) in count {

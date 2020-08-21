@@ -1,5 +1,4 @@
-use crate::{Counter, Process};
-use std::collections::HashMap;
+use crate::{Counter, FastHashMap, Process};
 
 const DIGIT_MAP: &[u8; 256] = &[
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
@@ -19,7 +18,7 @@ const DIGIT_MAP: &[u8; 256] = &[
 ];
 
 struct Context {
-    count_maps: Vec<HashMap<u64, usize>>,
+    count_maps: Vec<FastHashMap<u64, usize>>,
     digits: usize,
     masks: Vec<u64>,
 }
@@ -30,11 +29,11 @@ impl Context {
     fn new(digits: usize) -> Self {
         assert!(std::mem::size_of::<Number>() * 2 >= digits);
 
-        let mut count_maps: Vec<HashMap<Number, usize>> = Vec::new();
+        let mut count_maps: Vec<FastHashMap<Number, usize>> = Vec::new();
         for _number_width in 0..(digits + 1) {
-            count_maps.push(HashMap::new());
+            count_maps.push(FastHashMap::default());
         }
-        dbg!(digits);
+        //dbg!(digits);
 
         let mut masks = Vec::new();
 
@@ -142,8 +141,8 @@ impl Process for Variant1 {
     fn finalize(&mut self) {
         self.ctx.count_digit_end(&mut self.state);
     }
-    fn into_count(self) -> HashMap<Vec<u8>, Counter> {
-        let mut map = HashMap::new();
+    fn into_count(self) -> FastHashMap<Vec<u8>, Counter> {
+        let mut map = FastHashMap::default();
         let Self { ctx, state: _ } = self;
         let digits = ctx.digits;
 
