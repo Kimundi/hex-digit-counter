@@ -1,5 +1,7 @@
 use crate::{Counter, FastHashMap, Process};
 
+// by @ehf
+
 fn is_not_numeric<T: NumericType>(vec: &Vec<u8>) -> bool {
     for &c in vec {
         if !T::is_numeric(c) {

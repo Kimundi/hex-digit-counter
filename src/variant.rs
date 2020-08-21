@@ -100,9 +100,10 @@ impl Context {
         let mut v = v & HEX_MASKS[width];
         for width in (1..width + 1).rev() {
             *self.count_maps[width].entry(v).or_default() += 1;
-            //println!("  count {:0width$x}", v, width = width);
+            println!("  count {:0width$x}", v, width = width);
             v >>= 4;
         }
+        println!();
     }
 
     fn count_number_end(&mut self, v: u64, mut width: usize) {
@@ -110,12 +111,10 @@ impl Context {
             self.count_number(v, width);
             width -= 1;
         }
-        //println!();
     }
 
     fn count_number_mid(&mut self, v: u64, width: usize) {
         self.count_number(v, width);
-        //println!();
     }
 }
 
@@ -239,7 +238,7 @@ mod tests {
             .output();
         println!("-5----------------------------");
         Context::new(5)
-            .count_digits(b"1_23_456_7890_abcde_f012341_23_456_123")
+            .count_digits(b"1_23_456_7890_abcde_987654_f012341_23_456_123")
             .compute_sub_counts()
             .output();
         println!("-fin--------------------------");
