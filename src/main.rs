@@ -89,32 +89,16 @@ impl Context {
     }
 
     fn count_number(&mut self, v: u64, width: usize) {
-        let v = v & self.masks[width];
-        *self.count_maps[width].entry(v).or_default() += 1;
-        //println!("count {:0width$x} x{}", v, width, width = width);
+        let mut v = v & self.masks[width];
+        for width in (1..width + 1).rev() {
+            *self.count_maps[width].entry(v).or_default() += 1;
+            println!("  {:0width$x} count +{}", v, 1, width = width);
+            v >>= 4;
+        }
+        println!();
     }
 
     fn compute_sub_counts(&mut self) -> &mut Self {
-        for digits in (2..(self.digits + 1)).rev() {
-            println!("For counts for width = {}", digits);
-            let (smaller, eq_or_greater) = self.count_maps.split_at_mut(digits);
-            let map = &eq_or_greater[0];
-            for (number, count) in map {
-                println!("  {:0width$x}: {}", number, count, width = digits);
-                let w = digits - 1;
-                if w > 0 {
-                    println!("    Update counts for width = {}", w);
-                    let mut number = *number;
-                    for _offset in 0..(digits - w) + 1 {
-                        //println!("    Shift offset {}", offset);
-                        let number_m = number & self.masks[w];
-                        println!("      {:0width$x}: +{}", number_m, count, width = w);
-                        *smaller[w].entry(number_m).or_default() += count;
-                        number >>= 4;
-                    }
-                }
-            }
-        }
         self
     }
 
