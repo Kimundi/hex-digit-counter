@@ -17,10 +17,29 @@ const DIGIT_MAP: &[u8; 256] = &[
     255, 255, 255,
 ];
 
+const HEX_MASKS: &[u64; 17] = &[
+    0x0000000000000000,
+    0x000000000000000f,
+    0x00000000000000ff,
+    0x0000000000000fff,
+    0x000000000000ffff,
+    0x00000000000fffff,
+    0x0000000000ffffff,
+    0x000000000fffffff,
+    0x00000000ffffffff,
+    0x0000000fffffffff,
+    0x000000ffffffffff,
+    0x00000fffffffffff,
+    0x0000ffffffffffff,
+    0x000fffffffffffff,
+    0x00ffffffffffffff,
+    0x0fffffffffffffff,
+    0xffffffffffffffff,
+];
+
 struct Context {
-    count_maps: Vec<FastHashMap<u64, usize>>,
+    count_maps: Vec<FastHashMap<u64, Counter>>,
     digits: usize,
-    masks: Vec<u64>,
 }
 
 type Number = u64;
@@ -29,7 +48,7 @@ impl Context {
     fn new(digits: usize) -> Self {
         assert!(std::mem::size_of::<Number>() * 2 >= digits);
 
-        let mut count_maps: Vec<FastHashMap<Number, usize>> = Vec::new();
+        let mut count_maps = Vec::new();
         for _number_width in 0..(digits + 1) {
             count_maps.push(FastHashMap::default());
         }
@@ -47,11 +66,7 @@ impl Context {
             masks.push(mask);
         }
 
-        Self {
-            count_maps,
-            digits,
-            masks,
-        }
+        Self { count_maps, digits }
     }
 
     fn count_digit(&mut self, byte: u8, state: &mut BytesState) {
@@ -82,7 +97,7 @@ impl Context {
     }
 
     fn count_number(&mut self, v: u64, width: usize) {
-        let mut v = v & self.masks[width];
+        let mut v = v & HEX_MASKS[width];
         for width in (1..width + 1).rev() {
             *self.count_maps[width].entry(v).or_default() += 1;
             //println!("  count {:0width$x}", v, width = width);

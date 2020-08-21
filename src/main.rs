@@ -19,6 +19,13 @@ type FastHashMap<K, V> = HashMap<K, V, BuildHasherDefault<HashFn>>;
 
 const DEBUG_PRINT_COUNTS: bool = false;
 
+const ERRMSG: &str =
+    "Usage: <algorithm> <path> <digit> [buffer (MiB)]\nNote that maximum supported file size is 2^128-1 bytes.";
+// NB: Capacity used per default by std::BufReader
+const STD_CAPACITY: usize = 8 * 1024;
+// const CAPACITY: usize = 2048;
+const INTERVAL: u128 = 10000000;
+
 trait Process {
     fn new(digit: usize) -> Self;
     fn on_byte(&mut self, b: u8);
@@ -56,17 +63,12 @@ fn main() {
     }
 }
 
-static ERRMSG: &str =
-    "Usage: <algorithm> <path> <digit> [buffer (MiB)]\nNote that maximum supported file size is 2^128-1 bytes.";
-static CAPACITY: usize = 2048;
-static INTERVAL: u128 = 10000000;
-
 fn generic_main<T: Process>(opt: Opt) {
     let path = opt.file;
     let digit = opt.digit;
     let capacity = opt.capacity.unwrap_or_else(|| {
-        println!("Using default capacity {}", CAPACITY);
-        CAPACITY
+        println!("Using default capacity {}", STD_CAPACITY);
+        STD_CAPACITY
     });
 
     let mut imp = T::new(digit);
@@ -75,7 +77,8 @@ fn generic_main<T: Process>(opt: Opt) {
         Ok(file) => file,
         Err(error) => panic!("{}\n{}", error, ERRMSG),
     };
-    let bufstream = std::io::BufReader::with_capacity(1048576 * capacity, filestream);
+    let bufstream = std::io::BufReader::with_capacity(capacity, filestream);
+
     let mut cnt: u128 = 0;
     let mut cntp: u128 = 0;
     let mut bytestream = bufstream.bytes();
