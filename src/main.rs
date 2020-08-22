@@ -21,6 +21,7 @@ type FastHashMap<K, V> = HashMap<K, V, BuildHasherDefault<HashFn>>;
 
 const DEBUG_PRINT_COUNTS: bool = false;
 const DEBUG_PRINT_COUNTS2: bool = true;
+const DEBUG_HEX_HISTOGRAM: bool = true;
 
 const ERRMSG: &str =
     "Usage: <algorithm> <path> <digit> [buffer (MiB)]\nNote that maximum supported file size is 2^128-1 bytes.";
@@ -80,10 +81,26 @@ fn main_loop<T: Process>(
             break;
         }
     }
+    let mut hex_count = [0u64; 16];
     let now = std::time::Instant::now();
     for byte in iter {
         imp.on_byte(byte);
         count_callback(&now);
+        if DEBUG_HEX_HISTOGRAM {
+            let n = if b'0' <= byte && byte <= b'9' {
+                byte - b'0'
+            } else if b'a' <= byte && byte <= b'f' {
+                byte - b'a' + 10
+            } else if b'A' <= byte && byte <= b'F' {
+                byte - b'A' + 10
+            } else {
+                continue;
+            };
+            hex_count[n as usize] += 1;
+        }
+    }
+    if DEBUG_HEX_HISTOGRAM {
+        println!("debug hex histogram: = {:?}", hex_count);
     }
     now
 }
