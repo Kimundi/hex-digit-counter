@@ -36,7 +36,7 @@ trait Process {
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "basic")]
-struct Opt {
+struct CliOptions {
     #[structopt(name = "ALGORITHM")]
     algorithm: String,
 
@@ -51,7 +51,7 @@ struct Opt {
 }
 
 fn main() {
-    let opt = Opt::from_args();
+    let opt = CliOptions::from_args();
     println!("{:#?}", opt);
 
     match &opt.algorithm[..] {
@@ -65,7 +65,7 @@ fn main() {
     }
 }
 
-fn generic_main<T: Process>(opt: Opt) {
+fn generic_main<T: Process>(opt: CliOptions) {
     let path = opt.file;
     let digit = opt.digit;
     let capacity = opt.capacity.unwrap_or_else(|| {

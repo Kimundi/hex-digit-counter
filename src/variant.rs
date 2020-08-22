@@ -40,18 +40,18 @@ const HEX_MASKS: &[Number; 17] = &[
 type Number = u64;
 
 pub trait CountStrat: Default {
-    const EARLY: bool;
+    const COUNT_LATE: bool;
 }
 #[derive(Default)]
 pub struct EarlyCount;
 impl CountStrat for EarlyCount {
-    const EARLY: bool = true;
+    const COUNT_LATE: bool = false;
 }
 
 #[derive(Default)]
 pub struct LateCount;
 impl CountStrat for LateCount {
-    const EARLY: bool = false;
+    const COUNT_LATE: bool = true;
 }
 
 struct Context<T> {
@@ -119,14 +119,35 @@ impl<T: CountStrat> Context<T> {
     fn count_number(&mut self, v: u64, width: usize) {
         let mut v = v & HEX_MASKS[width];
         for width in (1..width + 1).rev() {
-            *self.count_maps[width].entry(v).or_default() += 1;
-            println!("  count {:0width$x}", v, width = width);
+            Self::count_number_single_masked(&mut self.count_maps[width], v, 1);
+            Self::print_count_number_single_masked(v, 1, width, self.digits);
             v >>= 4;
-            if !T::EARLY {
+            if T::COUNT_LATE {
                 break;
             }
         }
-        println!();
+    }
+
+    fn count_number_single_masked(
+        count_map: &mut FastHashMap<Number, Counter>,
+        v: u64,
+        delta: Counter,
+    ) {
+        *count_map.entry(v).or_default() += delta;
+    }
+
+    #[allow(unused_variables)]
+    fn print_count_number_single_masked(v: u64, delta: Counter, width: usize, digits: usize) {
+        /*
+        println!(
+            "  count {:0width$x}{:width2$}+{}",
+            v,
+            " ",
+            delta,
+            width = width,
+            width2 = (digits - width) + 1
+        );
+        */
     }
 
     fn count_number_end(&mut self, v: u64, mut width: usize) {
@@ -141,8 +162,26 @@ impl<T: CountStrat> Context<T> {
     }
 
     fn compute_sub_counts(&mut self) -> &mut Self {
-        if !T::EARLY {
-            //
+        if T::COUNT_LATE {
+            //println!("Count all prefixes of numbers");
+            for digits in (2..(self.digits + 1)).rev() {
+                let (prev, current) = self.count_maps.split_at_mut(digits);
+                let current = current.first().unwrap();
+                let prev = prev.last_mut().unwrap();
+
+                //println!("  Numbers with {} digits", digits);
+                for (&number, &count) in current {
+                    //println!("  prefix of {:0width$x}: {}", number, count, width = digits);
+                    let prefix_number = number >> 4;
+                    Self::count_number_single_masked(prev, prefix_number, count);
+                    Self::print_count_number_single_masked(
+                        prefix_number,
+                        count,
+                        digits - 1,
+                        self.digits,
+                    );
+                }
+            }
         }
 
         self
