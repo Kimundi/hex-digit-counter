@@ -54,7 +54,7 @@ struct CliOptions {
     capacity: Option<usize>,
 
     #[structopt(short, long)]
-    memmap: bool,
+    unmapped: bool,
 }
 
 fn main() {
@@ -133,7 +133,7 @@ fn generic_main<T: Process>(opt: CliOptions) {
         Ok(file) => file,
         Err(error) => panic!("{}\n{}", error, ERRMSG),
     };
-    let now = if opt.memmap {
+    let now = if !opt.unmapped {
         println!("Memory mapped read");
         let memmap = unsafe { memmap::Mmap::map(&filestream).unwrap() };
         let iter = memmap.iter().copied();
