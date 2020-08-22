@@ -82,7 +82,7 @@ impl<T: NumericType> Process for Original<T> {
 
 fn normalize_hex_byte(b: u8) -> u8 {
     if b >= b'A' && b <= b'F' {
-        let off = b'A' - b;
+        let off = b - b'A';
         b'a' + off
     } else {
         b

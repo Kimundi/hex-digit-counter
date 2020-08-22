@@ -21,7 +21,8 @@ type FastHashMap<K, V> = HashMap<K, V, BuildHasherDefault<HashFn>>;
 
 const DEBUG_PRINT_COUNTS: bool = false;
 const DEBUG_PRINT_COUNTS2: bool = true;
-const DEBUG_HEX_HISTOGRAM: bool = true;
+const DEBUG_HEX_HISTOGRAM: bool = false;
+const DEBUG_COMPUTE_OUTPUT_HASH: bool = true;
 
 const ERRMSG: &str =
     "Usage: <algorithm> <path> <digit> [buffer (MiB)]\nNote that maximum supported file size is 2^128-1 bytes.";
@@ -184,23 +185,25 @@ fn generic_main<T: Process>(opt: CliOptions) {
             //println!("[{}]: {:?}", std::str::from_utf8(&k).unwrap(), v);
         }
         for (n, counts) in counts.iter().enumerate() {
-            println!("numeric substrings of len={}: {}", n, counts);
+            println!("Numeric substrings of len={}: {}", n, counts);
         }
     }
 
-    println!("Output path: {}", outpath);
-    let mut output = match std::fs::File::create(&outpath) {
-        Ok(file) => file,
-        Err(error) => panic!("{}", error),
-    };
-    for i in 0..digit {
-        let mut filter = count.clone();
-        filter.retain(|k, _| k.len() == i + 1);
-        let tmap = std::collections::BTreeMap::from_iter(filter.iter());
-        write!(output, "{} {:?}\n", tmap.len(), tmap.values()).unwrap();
-    }
-    drop(output);
     {
+        println!("Output path: {}", outpath);
+        let mut output = match std::fs::File::create(&outpath) {
+            Ok(file) => file,
+            Err(error) => panic!("{}", error),
+        };
+        for i in 0..digit {
+            let mut filter = count.clone();
+            filter.retain(|k, _| k.len() == i + 1);
+            let tmap = std::collections::BTreeMap::from_iter(filter.iter());
+            write!(output, "{} {:?}\n", tmap.len(), tmap.values()).unwrap();
+        }
+    }
+
+    if DEBUG_COMPUTE_OUTPUT_HASH {
         let out_bytes = std::fs::read(outpath).unwrap();
 
         let mut hasher = Sha256::new();
