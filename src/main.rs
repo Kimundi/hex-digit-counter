@@ -1,4 +1,5 @@
 use original::Original;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::iter::FromIterator;
@@ -139,11 +140,6 @@ fn generic_main<T: Process>(opt: CliOptions) {
         path.parent().unwrap().display(),
         path.file_stem().unwrap().to_str().unwrap()
     );
-    println!("Output path: {}", outpath);
-    let mut output = match std::fs::File::create(outpath) {
-        Ok(file) => file,
-        Err(error) => panic!("{}", error),
-    };
     let count = imp.into_count();
 
     if DEBUG_PRINT_COUNTS {
@@ -175,10 +171,27 @@ fn generic_main<T: Process>(opt: CliOptions) {
         }
     }
 
+    println!("Output path: {}", outpath);
+    let mut output = match std::fs::File::create(&outpath) {
+        Ok(file) => file,
+        Err(error) => panic!("{}", error),
+    };
     for i in 0..digit {
         let mut filter = count.clone();
         filter.retain(|k, _| k.len() == i + 1);
         let tmap = std::collections::BTreeMap::from_iter(filter.iter());
         write!(output, "{} {:?}\n", tmap.len(), tmap.values()).unwrap();
+    }
+    drop(output);
+    {
+        let out_bytes = std::fs::read(outpath).unwrap();
+
+        let mut hasher = Sha256::new();
+
+        hasher.update(out_bytes);
+
+        let result = hasher.finalize();
+        let result = &format!("{:x}", result)[..8];
+        println!("Output hash: {}", result);
     }
 }
