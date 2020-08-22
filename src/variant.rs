@@ -54,14 +54,16 @@ impl CountStrat for LateCount {
     const COUNT_LATE: bool = true;
 }
 
-struct Context<T> {
+pub struct Variant<T> {
     count_maps: Vec<FastHashMap<Number, Counter>>,
     digits: usize,
+    current_number: u64,
+    current_digits: usize,
     _strat: T,
 }
 
-impl<T: CountStrat> Context<T> {
-    fn new(digits: usize) -> Self {
+impl<T: CountStrat> Variant<T> {
+    fn new_internal(digits: usize) -> Self {
         assert!(std::mem::size_of::<Number>() * 2 >= digits);
 
         let mut count_maps = Vec::new();
@@ -82,37 +84,42 @@ impl<T: CountStrat> Context<T> {
             masks.push(mask);
         }
 
+        let current_number: u64 = 0;
+        let current_digits = 0;
+
         Self {
             count_maps,
             digits,
+            current_number,
+            current_digits,
             _strat: T::default(),
         }
     }
 
-    fn count_digit(&mut self, byte: u8, state: &mut BytesState) {
+    fn count_digit(&mut self, byte: u8) {
         let v = DIGIT_MAP[byte as usize];
 
         if v == 0xff {
-            if state.current_digits != 0 {
-                self.count_number_end(state.current_number, state.current_digits);
-                state.current_digits = 0;
+            if self.current_digits != 0 {
+                self.count_number_end(self.current_number, self.current_digits);
+                self.current_digits = 0;
             }
             return;
         }
 
-        if state.current_digits == state.digits {
-            self.count_number_mid(state.current_number, state.current_digits);
-            state.current_digits -= 1;
+        if self.current_digits == self.digits {
+            self.count_number_mid(self.current_number, self.current_digits);
+            self.current_digits -= 1;
         }
 
-        state.current_number <<= 4;
-        state.current_number |= v as u64;
-        state.current_digits += 1;
+        self.current_number <<= 4;
+        self.current_number |= v as u64;
+        self.current_digits += 1;
     }
 
-    fn count_digit_end(&mut self, state: &mut BytesState) {
-        if state.current_digits != 0 {
-            self.count_number_end(state.current_number, state.current_digits);
+    fn count_digit_end(&mut self) {
+        if self.current_digits != 0 {
+            self.count_number_end(self.current_number, self.current_digits);
         }
     }
 
@@ -136,20 +143,6 @@ impl<T: CountStrat> Context<T> {
         *count_map.entry(v).or_default() += delta;
     }
 
-    #[allow(unused_variables)]
-    fn print_count_number_single_masked(v: u64, delta: Counter, width: usize, digits: usize) {
-        /*
-        println!(
-            "  count {:0width$x}{:width2$}+{}",
-            v,
-            " ",
-            delta,
-            width = width,
-            width2 = (digits - width) + 1
-        );
-        */
-    }
-
     fn count_number_end(&mut self, v: u64, mut width: usize) {
         while width != 0 {
             self.count_number(v, width);
@@ -161,7 +154,7 @@ impl<T: CountStrat> Context<T> {
         self.count_number(v, width);
     }
 
-    fn compute_sub_counts(&mut self) -> &mut Self {
+    fn do_late_counts(&mut self) {
         if T::COUNT_LATE {
             //println!("Count all prefixes of numbers");
             for digits in (2..(self.digits + 1)).rev() {
@@ -183,11 +176,23 @@ impl<T: CountStrat> Context<T> {
                 }
             }
         }
-
-        self
     }
 
-    fn debug_output(&self) {
+    #[allow(unused_variables)]
+    fn print_count_number_single_masked(v: u64, delta: Counter, width: usize, digits: usize) {
+        /*
+        println!(
+            "  count {:0width$x}{:width2$}+{}",
+            v,
+            " ",
+            delta,
+            width = width,
+            width2 = (digits - width) + 1
+        );
+        */
+    }
+
+    fn _debug_output(&self) {
         for digits in (1..(self.digits + 1)).rev() {
             println!("Digit counts for width = {}", digits);
             let map = &self.count_maps[digits];
@@ -198,51 +203,23 @@ impl<T: CountStrat> Context<T> {
     }
 }
 
-struct BytesState {
-    digits: usize,
-    current_number: u64,
-    current_digits: usize,
-}
-
-impl BytesState {
-    fn new(digits: usize) -> Self {
-        let current_number: u64 = 0;
-        let current_digits = 0;
-
-        BytesState {
-            digits,
-            current_number,
-            current_digits,
-        }
-    }
-}
-
-pub struct Variant<T> {
-    ctx: Context<T>,
-    state: BytesState,
-}
-
 impl<T: CountStrat> Process for Variant<T> {
     fn new(digits: usize) -> Self {
-        Self {
-            ctx: Context::new(digits),
-            state: BytesState::new(digits),
-        }
+        Self::new_internal(digits)
     }
     fn on_byte(&mut self, b: u8) {
-        self.ctx.count_digit(b, &mut self.state);
+        self.count_digit(b);
     }
     fn finalize(&mut self) {
-        self.ctx.count_digit_end(&mut self.state);
-        self.ctx.compute_sub_counts();
+        self.count_digit_end();
+        self.do_late_counts();
     }
     fn into_count(self) -> FastHashMap<Vec<u8>, Counter> {
         let mut map = FastHashMap::default();
-        let Self { ctx, state: _ } = self;
-        let digits = ctx.digits;
+        let digits = self.digits;
 
         for digits in 1..digits + 1 {
-            let m = &ctx.count_maps[digits];
+            let m = &self.count_maps[digits];
 
             for (number, count) in m {
                 let mut number = *number;
@@ -273,7 +250,7 @@ mod tests {
             a.on_byte(b);
         }
         a.finalize();
-        a.ctx.debug_output();
+        a._debug_output();
     }
 
     #[test]
