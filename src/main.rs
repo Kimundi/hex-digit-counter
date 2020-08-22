@@ -2,7 +2,7 @@ use original::Original;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::iter::FromIterator;
-use std::{hash::BuildHasherDefault, path::PathBuf};
+use std::{hash::BuildHasherDefault, path::PathBuf, time::Instant};
 use structopt::StructOpt;
 use variant::Variant;
 
@@ -25,7 +25,7 @@ const ERRMSG: &str =
 // NB: Capacity used per default by std::BufReader
 const STD_CAPACITY: usize = 8 * 1024;
 // const CAPACITY: usize = 2048;
-const INTERVAL: u128 = 10000000;
+const INTERVAL: Counter = 10000000;
 
 trait Process {
     fn new(digit: usize) -> Self;
@@ -48,6 +48,9 @@ struct CliOptions {
 
     #[structopt(name = "CAPACITY")]
     capacity: Option<usize>,
+
+    #[structopt(short, long)]
+    memmap: bool,
 }
 
 fn main() {
@@ -65,33 +68,33 @@ fn main() {
     }
 }
 
-fn generic_main<T: Process>(opt: CliOptions) {
-    let path = opt.file;
-    let digit = opt.digit;
-    let capacity = opt.capacity.unwrap_or_else(|| {
-        println!("Using default capacity {}", STD_CAPACITY);
-        STD_CAPACITY
-    });
-
-    let mut imp = T::new(digit);
-
-    let filestream = match std::fs::File::open(&path) {
-        Ok(file) => file,
-        Err(error) => panic!("{}\n{}", error, ERRMSG),
-    };
-    let bufstream = std::io::BufReader::with_capacity(capacity, filestream);
-
-    let mut cnt: u128 = 0;
-    let mut cntp: u128 = 0;
-    let mut bytestream = bufstream.bytes();
-    for byte in &mut bytestream {
-        if byte.unwrap() == b'.' {
+fn main_loop<T: Process>(
+    imp: &mut T,
+    mut iter: impl Iterator<Item = u8>,
+    mut count_callback: impl FnMut(&Instant),
+) -> Instant {
+    for byte in &mut iter {
+        if byte == b'.' {
             break;
         }
     }
     let now = std::time::Instant::now();
-    for byte in &mut bytestream {
-        imp.on_byte(byte.unwrap());
+    for byte in iter {
+        imp.on_byte(byte);
+        count_callback(&now);
+    }
+    now
+}
+
+fn generic_main<T: Process>(opt: CliOptions) {
+    let path = opt.file;
+    let digit = opt.digit;
+
+    let mut imp = T::new(digit);
+
+    let mut cnt: Counter = 0;
+    let mut cntp: Counter = 0;
+    let do_count = |now: &Instant| {
         cnt += 1;
         if cnt == INTERVAL {
             cntp += 1;
@@ -102,7 +105,28 @@ fn generic_main<T: Process>(opt: CliOptions) {
             );
             cnt = 0;
         }
-    }
+    };
+
+    let filestream = match std::fs::File::open(&path) {
+        Ok(file) => file,
+        Err(error) => panic!("{}\n{}", error, ERRMSG),
+    };
+    let now = if opt.memmap {
+        println!("Memory mapped read");
+        let memmap = unsafe { memmap::Mmap::map(&filestream).unwrap() };
+        let iter = memmap.iter().copied();
+        main_loop(&mut imp, iter, do_count)
+    } else {
+        println!("Buffered read");
+        let capacity = opt.capacity.unwrap_or_else(|| {
+            println!("Using default capacity {}", STD_CAPACITY);
+            STD_CAPACITY
+        });
+        let bufstream = std::io::BufReader::with_capacity(capacity, filestream);
+        let iter = bufstream.bytes().map(|b| b.unwrap());
+        main_loop(&mut imp, iter, do_count)
+    };
+
     println!(
         "Digits: {}, Final Time: {}",
         cntp * INTERVAL + cnt,
