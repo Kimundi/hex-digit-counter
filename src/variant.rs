@@ -186,6 +186,16 @@ impl<T: CountStrat> Context<T> {
 
         self
     }
+
+    fn debug_output(&self) {
+        for digits in (1..(self.digits + 1)).rev() {
+            println!("Digit counts for width = {}", digits);
+            let map = &self.count_maps[digits];
+            for (number, count) in map {
+                println!("  {:0width$x}: {}", number, count, width = digits);
+            }
+        }
+    }
 }
 
 struct BytesState {
@@ -256,60 +266,28 @@ impl<T: CountStrat> Process for Variant<T> {
 mod tests {
     use super::*;
 
-    impl<T: CountStrat> Context<T> {
-        fn count_digits(&mut self, data: &[u8]) -> &mut Self {
-            let mut state = BytesState::new(self.digits);
-
-            let mut j = 0;
-            while j < data.len() {
-                self.count_digit(data[j], &mut state);
-                j += 1;
-            }
-            self.count_digit_end(&mut state);
-
-            self
+    fn test_out(d: usize, b: &[u8]) {
+        type Ctx = Variant<LateCount>;
+        let mut a = Ctx::new(d);
+        for b in b.iter().copied() {
+            a.on_byte(b);
         }
-
-        fn output(&self) {
-            for digits in (1..(self.digits + 1)).rev() {
-                println!("Digit counts for width = {}", digits);
-                let map = &self.count_maps[digits];
-                for (number, count) in map {
-                    println!("  {:0width$x}: {}", number, count, width = digits);
-                }
-            }
-        }
+        a.finalize();
+        a.ctx.debug_output();
     }
 
     #[test]
     fn test_main() {
-        type Ctx = Context<LateCount>;
-
         println!("-1----------------------------");
-        Ctx::new(2)
-            .count_digits(b"1234567890")
-            .compute_sub_counts()
-            .output();
+        test_out(2, b"1234567890");
         println!("-2----------------------------");
-        Ctx::new(2)
-            .count_digits(b"_1234_5678_90_7")
-            .compute_sub_counts()
-            .output();
+        test_out(2, b"_1234_5678_90_7");
         println!("-3----------------------------");
-        Ctx::new(5)
-            .count_digits(b"1234567890_ffff")
-            .compute_sub_counts()
-            .output();
+        test_out(5, b"1234567890_ffff");
         println!("-4----------------------------");
-        Ctx::new(5)
-            .count_digits(b"1_23_456_7890_abcde_f01234")
-            .compute_sub_counts()
-            .output();
+        test_out(5, b"1_23_456_7890_abcde_f01234");
         println!("-5----------------------------");
-        Ctx::new(5)
-            .count_digits(b"1_23_456_7890_abcde_987654_f012341_23_456_123")
-            .compute_sub_counts()
-            .output();
+        test_out(5, b"1_23_456_7890_abcde_987654_f012341_23_456_123");
         println!("-fin--------------------------");
     }
 
