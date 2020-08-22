@@ -20,7 +20,7 @@ type HashFn = fxhash::FxHasher;
 type FastHashMap<K, V> = HashMap<K, V, BuildHasherDefault<HashFn>>;
 
 const DEBUG_PRINT_COUNTS: bool = false;
-const DEBUG_PRINT_COUNTS2: bool = true;
+const DEBUG_PRINT_COUNTS2: bool = false;
 const DEBUG_HEX_HISTOGRAM: bool = false;
 const DEBUG_COMPUTE_OUTPUT_HASH: bool = true;
 
