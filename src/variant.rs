@@ -39,22 +39,23 @@ const HEX_MASKS: &[Number; 17] = &[
 
 type Number = u64;
 
-pub trait CountStrat: Default {
+pub trait CountStrategy: Default {
     const COUNT_LATE: bool;
 }
+
 #[derive(Default)]
 pub struct EarlyCount;
-impl CountStrat for EarlyCount {
+impl CountStrategy for EarlyCount {
     const COUNT_LATE: bool = false;
 }
 
 #[derive(Default)]
 pub struct LateCount;
-impl CountStrat for LateCount {
+impl CountStrategy for LateCount {
     const COUNT_LATE: bool = true;
 }
 
-pub trait CounterStrategy<'a> {
+pub trait CounterStorage<'a> {
     type ForWidth: CounterForWidth<'a>;
 
     fn new(digits: usize) -> Self;
@@ -64,35 +65,17 @@ pub trait CounterStrategy<'a> {
     }
 }
 
-pub struct HashMapCounter {
-    count_maps: Vec<FastHashMap<Number, Counter>>,
-    digits: usize,
-}
-
 pub trait CounterForWidth<'a> {
     fn for_each(&self, f: impl FnMut(Number, Counter));
     fn count_number(&mut self, v: Number, delta: u64);
 }
 
-pub struct HashMapCounterWidth<'a> {
-    map: &'a mut FastHashMap<Number, Counter>,
+pub struct HashMapCounter {
+    count_maps: Vec<FastHashMap<Number, Counter>>,
     digits: usize,
-    width: usize,
 }
 
-impl<'a> CounterForWidth<'a> for HashMapCounterWidth<'a> {
-    fn for_each(&self, mut f: impl FnMut(Number, Counter)) {
-        for (k, v) in self.map.iter() {
-            f(*k, *v);
-        }
-    }
-    fn count_number(&mut self, v: Number, delta: u64) {
-        *self.map.entry(v).or_default() += delta;
-        print_count_number_single_masked(v, 1, self.width, self.digits);
-    }
-}
-
-impl<'a> CounterStrategy<'a> for HashMapCounter {
+impl<'a> CounterStorage<'a> for HashMapCounter {
     type ForWidth = HashMapCounterWidth<'a>;
 
     fn new(digits: usize) -> Self {
@@ -121,19 +104,91 @@ impl<'a> CounterStrategy<'a> for HashMapCounter {
     }
 }
 
-pub struct Variant<T> {
-    count_maps: HashMapCounter,
+pub struct HashMapCounterWidth<'a> {
+    map: &'a mut FastHashMap<Number, Counter>,
+    digits: usize,
+    width: usize,
+}
+
+impl<'a> CounterForWidth<'a> for HashMapCounterWidth<'a> {
+    fn for_each(&self, mut f: impl FnMut(Number, Counter)) {
+        for (k, v) in self.map.iter() {
+            f(*k, *v);
+        }
+    }
+    fn count_number(&mut self, v: Number, delta: u64) {
+        *self.map.entry(v).or_default() += delta;
+        print_count_number_single_masked(v, 1, self.width, self.digits);
+    }
+}
+
+pub struct VecCounter {
+    count_maps: Vec<Vec<Counter>>,
+    digits: usize,
+}
+
+impl<'a> CounterStorage<'a> for VecCounter {
+    type ForWidth = VecCounterWidth<'a>;
+
+    fn new(digits: usize) -> Self {
+        let mut count_maps = Vec::new();
+        let mut vec_len = 1;
+        for _number_width in 0..(digits + 1) {
+            count_maps.push(vec![0; vec_len]);
+            vec_len *= 16;
+        }
+        Self { count_maps, digits }
+    }
+    fn width_and_prev_width(&'a mut self, width: usize) -> (Self::ForWidth, Self::ForWidth) {
+        let (prev, current) = self.count_maps.split_at_mut(width);
+        let current = current.first_mut().unwrap();
+        let prev = prev.last_mut().unwrap();
+        (
+            VecCounterWidth {
+                digits: self.digits,
+                width: width,
+                map: current,
+            },
+            VecCounterWidth {
+                digits: self.digits,
+                width: width - 1,
+                map: prev,
+            },
+        )
+    }
+}
+
+pub struct VecCounterWidth<'a> {
+    map: &'a mut Vec<Counter>,
+    digits: usize,
+    width: usize,
+}
+
+impl<'a> CounterForWidth<'a> for VecCounterWidth<'a> {
+    fn for_each(&self, mut f: impl FnMut(Number, Counter)) {
+        for (k, v) in self.map.iter().copied().enumerate() {
+            f(k as Number, v);
+        }
+    }
+    fn count_number(&mut self, v: Number, delta: u64) {
+        self.map[v as usize] += delta;
+        print_count_number_single_masked(v, 1, self.width, self.digits);
+    }
+}
+
+pub struct Variant<T, U> {
+    count_maps: U,
     digits: usize,
     current_number: u64,
     current_digits: usize,
     _strat: T,
 }
 
-impl<T: CountStrat> Variant<T> {
+impl<T: CountStrategy, U: for<'a> CounterStorage<'a>> Variant<T, U> {
     fn new_internal(digits: usize) -> Self {
         assert!(std::mem::size_of::<Number>() * 2 >= digits);
 
-        let count_maps = HashMapCounter::new(digits);
+        let count_maps = U::new(digits);
 
         let mut masks = Vec::new();
 
@@ -249,7 +304,7 @@ fn print_count_number_single_masked(v: u64, delta: Counter, width: usize, digits
     */
 }
 
-impl<T: CountStrat> Process for Variant<T> {
+impl<T: CountStrategy, U: for<'a> CounterStorage<'a>> Process for Variant<T, U> {
     fn new(digits: usize) -> Self {
         Self::new_internal(digits)
     }
@@ -287,7 +342,7 @@ mod tests {
     use super::*;
 
     fn test_out(d: usize, b: &[u8]) {
-        type Ctx = Variant<LateCount>;
+        type Ctx = Variant<LateCount, HashMapCounter>;
         let mut a = Ctx::new(d);
         for b in b.iter().copied() {
             a.on_byte(b);

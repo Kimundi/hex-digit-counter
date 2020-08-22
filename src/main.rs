@@ -64,8 +64,10 @@ fn main() {
     match &opt.algorithm[..] {
         "original" => generic_main::<Original<original::StdNumeric>>(opt),
         "original-hex" => generic_main::<Original<original::HexDigit>>(opt),
-        "variant-1" => generic_main::<Variant<variant::EarlyCount>>(opt),
-        "variant-2" => generic_main::<Variant<variant::LateCount>>(opt),
+        "variant-1" => generic_main::<Variant<variant::EarlyCount, variant::HashMapCounter>>(opt),
+        "variant-2" => generic_main::<Variant<variant::LateCount, variant::HashMapCounter>>(opt),
+        "variant-3" => generic_main::<Variant<variant::EarlyCount, variant::VecCounter>>(opt),
+        "variant-4" => generic_main::<Variant<variant::LateCount, variant::VecCounter>>(opt),
         other => {
             panic!("Unsupported algorithm {}\n{}", other, ERRMSG);
         }
@@ -148,11 +150,17 @@ fn generic_main<T: Process>(opt: CliOptions) {
     };
 
     println!(
-        "Digits: {}, Final Time: {}",
+        "Digits: {}, Eof Time: {}",
         cntp * INTERVAL + cnt,
         now.elapsed().as_secs_f64()
     );
     imp.finalize();
+    println!(
+        "Digits: {}, Final Time: {}",
+        cntp * INTERVAL + cnt,
+        now.elapsed().as_secs_f64()
+    );
+
     let outpath = format!(
         "{}/{}_result.txt",
         path.parent().unwrap().display(),
