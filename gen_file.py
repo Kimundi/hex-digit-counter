@@ -2,7 +2,7 @@ from pathlib import Path
 import random
 
 o = Path(__file__).parent / "large_out.txt"
-size = (1024 ** 2) * 10
+size = (1024 ** 2) * 1
 
 with open(o, "w") as f:
     f.write("1.")

@@ -19,6 +19,7 @@ type HashFn = fxhash::FxHasher;
 type FastHashMap<K, V> = HashMap<K, V, BuildHasherDefault<HashFn>>;
 
 const DEBUG_PRINT_COUNTS: bool = false;
+const DEBUG_PRINT_COUNTS2: bool = true;
 
 const ERRMSG: &str =
     "Usage: <algorithm> <path> <digit> [buffer (MiB)]\nNote that maximum supported file size is 2^128-1 bytes.";
@@ -150,6 +151,27 @@ fn generic_main<T: Process>(opt: CliOptions) {
         count.sort();
         for (k, v) in count {
             println!("[{}]: {:?}", std::str::from_utf8(&k).unwrap(), v);
+        }
+    }
+
+    if DEBUG_PRINT_COUNTS2 {
+        let mut count = count.iter().collect::<Vec<_>>();
+        count.sort();
+
+        let file_len = std::fs::metadata(&path).unwrap().len();
+        println!("File size: {}", file_len);
+
+        let mut counts = Vec::<Counter>::new();
+
+        for (k, _) in count {
+            while counts.len() <= k.len() {
+                counts.push(0);
+            }
+            counts[k.len()] += 1;
+            //println!("[{}]: {:?}", std::str::from_utf8(&k).unwrap(), v);
+        }
+        for (n, counts) in counts.iter().enumerate() {
+            println!("numeric substrings of len={}: {}", n, counts);
         }
     }
 
