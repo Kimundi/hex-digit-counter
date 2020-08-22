@@ -62,6 +62,7 @@ impl<T: NumericType> Process for Original<T> {
         //println!("Byte '{}'", byte as char);
         for i in 0..(self.buffer.len()) {
             self.buffer[i].remove(0);
+            let byte = normalize_hex_byte(byte);
             self.buffer[i].push(byte);
             //_debug_print(&self.buffer[i], i);
             *self.count.entry(self.buffer[i].clone()).or_insert(0) += 1;
@@ -76,5 +77,14 @@ impl<T: NumericType> Process for Original<T> {
     }
     fn into_count(self) -> FastHashMap<Vec<u8>, Counter> {
         self.count
+    }
+}
+
+fn normalize_hex_byte(b: u8) -> u8 {
+    if b >= b'A' && b <= b'F' {
+        let off = b'A' - b;
+        b'a' + off
+    } else {
+        b
     }
 }
