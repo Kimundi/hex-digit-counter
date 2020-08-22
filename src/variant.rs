@@ -54,8 +54,75 @@ impl CountStrat for LateCount {
     const COUNT_LATE: bool = true;
 }
 
-pub struct Variant<T> {
+pub trait CounterStrategy<'a> {
+    type ForWidth: CounterForWidth<'a>;
+
+    fn new(digits: usize) -> Self;
+    fn width_and_prev_width(&'a mut self, width: usize) -> (Self::ForWidth, Self::ForWidth);
+    fn width(&'a mut self, width: usize) -> Self::ForWidth {
+        self.width_and_prev_width(width).0
+    }
+}
+
+pub struct HashMapCounter {
     count_maps: Vec<FastHashMap<Number, Counter>>,
+    digits: usize,
+}
+
+pub trait CounterForWidth<'a> {
+    fn for_each(&self, f: impl FnMut(Number, Counter));
+    fn count_number(&mut self, v: Number, delta: u64);
+}
+
+pub struct HashMapCounterWidth<'a> {
+    map: &'a mut FastHashMap<Number, Counter>,
+    digits: usize,
+    width: usize,
+}
+
+impl<'a> CounterForWidth<'a> for HashMapCounterWidth<'a> {
+    fn for_each(&self, mut f: impl FnMut(Number, Counter)) {
+        for (k, v) in self.map.iter() {
+            f(*k, *v);
+        }
+    }
+    fn count_number(&mut self, v: Number, delta: u64) {
+        *self.map.entry(v).or_default() += delta;
+        print_count_number_single_masked(v, 1, self.width, self.digits);
+    }
+}
+
+impl<'a> CounterStrategy<'a> for HashMapCounter {
+    type ForWidth = HashMapCounterWidth<'a>;
+
+    fn new(digits: usize) -> Self {
+        let mut count_maps = Vec::new();
+        for _number_width in 0..(digits + 1) {
+            count_maps.push(FastHashMap::default());
+        }
+        Self { count_maps, digits }
+    }
+    fn width_and_prev_width(&'a mut self, width: usize) -> (Self::ForWidth, Self::ForWidth) {
+        let (prev, current) = self.count_maps.split_at_mut(width);
+        let current = current.first_mut().unwrap();
+        let prev = prev.last_mut().unwrap();
+        (
+            HashMapCounterWidth {
+                digits: self.digits,
+                width: width,
+                map: current,
+            },
+            HashMapCounterWidth {
+                digits: self.digits,
+                width: width - 1,
+                map: prev,
+            },
+        )
+    }
+}
+
+pub struct Variant<T> {
+    count_maps: HashMapCounter,
     digits: usize,
     current_number: u64,
     current_digits: usize,
@@ -66,11 +133,7 @@ impl<T: CountStrat> Variant<T> {
     fn new_internal(digits: usize) -> Self {
         assert!(std::mem::size_of::<Number>() * 2 >= digits);
 
-        let mut count_maps = Vec::new();
-        for _number_width in 0..(digits + 1) {
-            count_maps.push(FastHashMap::default());
-        }
-        //dbg!(digits);
+        let count_maps = HashMapCounter::new(digits);
 
         let mut masks = Vec::new();
 
@@ -126,21 +189,12 @@ impl<T: CountStrat> Variant<T> {
     fn count_number(&mut self, v: u64, width: usize) {
         let mut v = v & HEX_MASKS[width];
         for width in (1..width + 1).rev() {
-            Self::count_number_single_masked(&mut self.count_maps[width], v, 1);
-            Self::print_count_number_single_masked(v, 1, width, self.digits);
+            self.count_maps.width(width).count_number(v, 1);
             v >>= 4;
             if T::COUNT_LATE {
                 break;
             }
         }
-    }
-
-    fn count_number_single_masked(
-        count_map: &mut FastHashMap<Number, Counter>,
-        v: u64,
-        delta: Counter,
-    ) {
-        *count_map.entry(v).or_default() += delta;
     }
 
     fn count_number_end(&mut self, v: u64, mut width: usize) {
@@ -158,49 +212,41 @@ impl<T: CountStrat> Variant<T> {
         if T::COUNT_LATE {
             //println!("Count all prefixes of numbers");
             for digits in (2..(self.digits + 1)).rev() {
-                let (prev, current) = self.count_maps.split_at_mut(digits);
-                let current = current.first().unwrap();
-                let prev = prev.last_mut().unwrap();
+                let (current, mut prev) = self.count_maps.width_and_prev_width(digits);
 
                 //println!("  Numbers with {} digits", digits);
-                for (&number, &count) in current {
+                current.for_each(|number, count| {
                     //println!("  prefix of {:0width$x}: {}", number, count, width = digits);
                     let prefix_number = number >> 4;
-                    Self::count_number_single_masked(prev, prefix_number, count);
-                    Self::print_count_number_single_masked(
-                        prefix_number,
-                        count,
-                        digits - 1,
-                        self.digits,
-                    );
-                }
+                    prev.count_number(prefix_number, count);
+                });
             }
         }
     }
 
-    #[allow(unused_variables)]
-    fn print_count_number_single_masked(v: u64, delta: Counter, width: usize, digits: usize) {
-        /*
-        println!(
-            "  count {:0width$x}{:width2$}+{}",
-            v,
-            " ",
-            delta,
-            width = width,
-            width2 = (digits - width) + 1
-        );
-        */
-    }
-
-    fn _debug_output(&self) {
+    fn _debug_output(&mut self) {
         for digits in (1..(self.digits + 1)).rev() {
             println!("Digit counts for width = {}", digits);
-            let map = &self.count_maps[digits];
-            for (number, count) in map {
+
+            self.count_maps.width(digits).for_each(|number, count| {
                 println!("  {:0width$x}: {}", number, count, width = digits);
-            }
+            });
         }
     }
+}
+
+#[allow(unused_variables)]
+fn print_count_number_single_masked(v: u64, delta: Counter, width: usize, digits: usize) {
+    /*
+    println!(
+        "  count {:0width$x}{:width2$}+{}",
+        v,
+        " ",
+        delta,
+        width = width,
+        width2 = (digits - width) + 1
+    );
+    */
 }
 
 impl<T: CountStrat> Process for Variant<T> {
@@ -214,15 +260,12 @@ impl<T: CountStrat> Process for Variant<T> {
         self.count_digit_end();
         self.do_late_counts();
     }
-    fn into_count(self) -> FastHashMap<Vec<u8>, Counter> {
+    fn into_count(mut self) -> FastHashMap<Vec<u8>, Counter> {
         let mut map = FastHashMap::default();
         let digits = self.digits;
 
         for digits in 1..digits + 1 {
-            let m = &self.count_maps[digits];
-
-            for (number, count) in m {
-                let mut number = *number;
+            self.count_maps.width(digits).for_each(|mut number, count| {
                 let mut vec = Vec::new();
                 for _ in 0..digits {
                     let c = (number & 0xf) as u8;
@@ -231,8 +274,8 @@ impl<T: CountStrat> Process for Variant<T> {
                     number >>= 4;
                 }
                 vec.reverse();
-                assert!(map.insert(vec, *count as Counter).is_none());
-            }
+                assert!(map.insert(vec, count as Counter).is_none());
+            });
         }
 
         map
