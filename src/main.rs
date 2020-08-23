@@ -10,6 +10,8 @@ use variant::Variant;
 mod original;
 mod variant;
 
+mod single_file;
+
 // NB: We will not exhaust a u64 with modern computers as long as its
 // counted up by 1 at a time.
 type Counter = u64;
@@ -58,6 +60,10 @@ struct CliOptions {
 }
 
 fn main() {
+    if false {
+        single_file::main();
+    }
+
     let opt = CliOptions::from_args();
     println!("{:#?}", opt);
 
